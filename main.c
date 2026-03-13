@@ -326,6 +326,19 @@ static int FindElfFile() {
     return -1; // Failure: File not found
 }
 
+// Overrides OSD language from cnf file for import games.
+// Falls back to console's default language if no cnf file is found or if the value is invalid.
+static void OverrideOSDLanguage() {
+    ConfigParam config;
+    GetOsdConfigParam(&config);
+    int language = config.language;
+
+    Read_Launcher_CNF("disc-launcher.cnf", &language);
+
+    config.language = language;
+    SetOsdConfigParam(&config);
+}
+
 int main(int argc, char *argv[]) {
     int DiscType, done;
     SifInitRpc(0);
@@ -378,6 +391,7 @@ int main(int argc, char *argv[]) {
     DiscRegion = GetDiscRegion(cdboot_path);
     GetBootROMVersion();
     GetConsoleRegion();
+    OverrideOSDLanguage();
 
     if ((DiscType == SCECdPSCD) || (DiscType == SCECdPSCDDA)) { // If PS1 game disc
         char *args[2] = {cdboot_path, ver};

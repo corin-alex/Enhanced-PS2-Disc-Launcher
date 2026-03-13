@@ -1,6 +1,7 @@
 #include <malloc.h>
 #include <string.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 #define NEWLIB_PORT_AWARE
 #include <io_common.h>
@@ -147,4 +148,39 @@ int Read_SYSTEM_CNF(char *boot_path, char *ver)
     } // ends for
     free(RAM_p);
     return Disc_Type;
+}
+
+// Reads launcher cnf file to get prefered game language
+int Read_Launcher_CNF(const char *cnf_path, int *language)
+{
+    size_t CNF_size;
+    char *RAM_p, *CNF_p, *name, *value;
+    int fd = -1;
+
+    fd = open(cnf_path, O_RDONLY);
+    if (fd < 0)
+        return -1;
+
+    CNF_size = lseek(fd, 0, SEEK_END);
+    lseek(fd, 0, SEEK_SET);
+    RAM_p = (char *)malloc(CNF_size + 1);
+    CNF_p = RAM_p;
+    if (CNF_p == NULL) {
+        close(fd);
+        return -1;
+    }
+    read(fd, CNF_p, CNF_size);
+    close(fd);
+    CNF_p[CNF_size] = '\0';
+
+    while (get_CNF_string(&CNF_p, &name, &value)) {
+        if (!strcmp(name, "language")) {
+            int val = atoi(value);
+            if (val >= 0 && val <= 7) {
+                *language = val;
+            }
+        }
+    }
+    free(RAM_p);
+    return 0;
 }

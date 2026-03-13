@@ -9,7 +9,7 @@ EE_INCS := -I$(PS2SDK)/ports/include -I$(PS2DEV)/gsKit/include -I$(PS2SDK)/ee/in
 EE_GPVAL = -G0
 EE_CFLAGS = -O2 -D_EE -Os -mgpopt -mno-gpopt $(EE_GPVAL) -Wall $(EE_INCS) -Wno-stringop-truncation -I$(PS2DEV)/gsKit/include
 EE_LDFLAGS = -L$(PS2SDK)/ee/lib -L$(PS2DEV)/gsKit/lib
-EE_LIBS += -lfileXio -lpatches -lelf-loader-nocolour -L$(PS2SDK)/ports/lib -L$(PS2DEV)/gsKit/lib/ -ldmakit -lgskit -ldebug
+EE_LIBS += -lfileXio -lpatches -lelf-loader-nocolour -L$(PS2SDK)/ports/lib -L$(PS2DEV)/gsKit/lib/ -lgskit -ldmakit -ldebug
 EE_NEWLIB_NANO ?= 1
 EE_COMPACT_EXECUTABLE ?= 1
 

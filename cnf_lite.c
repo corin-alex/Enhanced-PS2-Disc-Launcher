@@ -2,6 +2,7 @@
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdbool.h>
 
 #define NEWLIB_PORT_AWARE
 #include <io_common.h>
@@ -150,8 +151,8 @@ int Read_SYSTEM_CNF(char *boot_path, char *ver)
     return Disc_Type;
 }
 
-// Reads launcher cnf file to get prefered game language
-int Read_Launcher_CNF(const char *cnf_path, int *language)
+// Reads launcher cnf file to get user preferences
+int Read_Launcher_CNF(const char *cnf_path, int *language,  bool *autolaunch)
 {
     size_t CNF_size;
     char *RAM_p, *CNF_p, *name, *value;
@@ -179,6 +180,11 @@ int Read_Launcher_CNF(const char *cnf_path, int *language)
             if (val >= 0 && val <= 7) {
                 *language = val;
             }
+        }
+
+        if (!strcmp(name, "autolaunch")) {
+            int val = atoi(value);
+            *autolaunch = (val <= 0) ? false : true;
         }
     }
     free(RAM_p);

@@ -1,18 +1,20 @@
+#define LAUNCHER_VERSION "1.1.2"
+
 #include <kernel.h>
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdbool.h>
 #include <libcdvd.h>
 #include <debug.h>
 #include <malloc.h>
 #include <string.h>
 #include <osd_config.h>
-#include <gsKit.h>
-#include <stdint.h>
 #include <ctype.h>  // For toupper used to convert to uppercase
 #include <kernel.h>
 #include <sifrpc.h>
 #include <loadfile.h>
+#include <libpad.h>
 
 // elf loading
 #include <iopcontrol.h>
@@ -205,79 +207,6 @@ static void DelayIO(void) {
         nopdelay();
 }
 
-// Game ID function to calculate CRC
-static uint8_t gameid_calc_crc(const uint8_t *data, int len) {
-    uint8_t crc = 0x00;
-    for (int i = 0; i < len; i++) {
-        crc += data[i];
-    }
-    return 0x100 - crc;
-}
-
-// Function to draw game ID using GSKit
-void DrawGameID(GSGLOBAL *gsGlobal, int screenWidth, int screenHeight, const char* game_id) {
-    uint8_t data[64] = { 0 };
-    int gidlen = strnlen(game_id, 11);  // Ensure the length does not exceed 11 characters
-
-    int dpos = 0;
-    data[dpos++] = 0xA5;  // detect word
-    data[dpos++] = 0x00;  // address offset
-    dpos++;
-    data[dpos++] = gidlen;
-
-    memcpy(&data[dpos], game_id, gidlen);
-    dpos += gidlen;
-
-    data[dpos++] = 0x00;
-    data[dpos++] = 0xD5;  // end word
-    data[dpos++] = 0x00;  // padding
-
-    int data_len = dpos;
-    data[2] = gameid_calc_crc(&data[3], data_len - 3);
-
-    int xstart = (screenWidth / 2) - (data_len * 8);
-    int ystart = screenHeight - (((screenHeight / 8) * 2) + 20);
-    int height = 2;
-
-    for (int i = 0; i < data_len; i++) {
-        for (int ii = 7; ii >= 0; ii--) {
-            int x = xstart + (i * 16 + ((7 - ii) * 2));
-            int x1 = x + 1;
-
-            gsKit_prim_sprite(gsGlobal, x, ystart, x1, ystart + height, 1, GS_SETREG_RGBA(0xFF, 0x00, 0xFF, 0x80));
-
-            uint32_t color = (data[i] >> ii) & 1 ? GS_SETREG_RGBA(0x00, 0xFF, 0xFF, 0x80) : GS_SETREG_RGBA(0xFF, 0xFF, 0x00, 0x80);
-            gsKit_prim_sprite(gsGlobal, x1, ystart, x1 + 1, ystart + height, 1, color);
-        }
-    }
-}
-
-void DisplayGameID() {
-    GSGLOBAL *gsGlobal = gsKit_init_global();
-
-    // Set the screen mode (e.g., GS_MODE_PAL, GS_MODE_NTSC)
-    gsGlobal->Mode = GS_MODE_DTV_480P;  // Set to 480p mode
-    gsGlobal->Width = 640;  // Width of the screen
-    gsGlobal->Height = 448;  // Height of the screen
-    gsGlobal->Interlace = GS_NONINTERLACED;  // Non-interlaced mode for progressive scan
-    gsGlobal->Field = GS_FRAME;  // Frame mode
-    gsGlobal->PSM = GS_PSM_CT24;  // Pixel storage format (24-bit color)
-    gsGlobal->PSMZ = GS_PSMZ_32;  // Z buffer format (32-bit depth)
-    gsGlobal->DoubleBuffering = GS_SETTING_OFF;  // Disable double buffering
-    gsGlobal->ZBuffering = GS_SETTING_OFF;  // Disable Z buffering
-
-    // Initialize the screen
-    gsKit_vram_clear(gsGlobal);  // Clear VRAM
-    gsKit_init_screen(gsGlobal);
-
-    // Display game ID
-    DrawGameID(gsGlobal, gsGlobal->Width, gsGlobal->Height, game_id);
-
-    // Sync and flip the GS (Graphics Synthesizer)
-    gsKit_sync_flip(gsGlobal);
-    gsKit_queue_exec(gsGlobal);
-}
-
 static void LoadModules()
 {
     SifInitIopHeap();
@@ -326,17 +255,72 @@ static int FindElfFile() {
     return -1; // Failure: File not found
 }
 
-// Overrides OSD language from cnf file for import games.
-// Falls back to console's default language if no cnf file is found or if the value is invalid.
-static void OverrideOSDLanguage() {
+static void PrintLogo() {
+    scr_clear();
+    scr_printf("\n"
+               "#######################              ################  #######################\n"
+               "#######################              ################  #######################\n"
+               "                     ##              ##                                     ##\n"
+               "                     ##              ##                                     ##\n"
+               "#######################              ##                #######################\n"
+               "##                                   ##                ##\n"
+               "##                                   ##                ##\n"
+               "##                      ###############                #######################\n"
+               "##                      ###############                #######################\n"
+               "Enhanced PS2 Disc Launcher v%s\n\n", LAUNCHER_VERSION);
+}
+
+static unsigned char padbuf[256] __attribute__((aligned(64)));
+
+// Waits for user to press Cross on gamepad
+static void WaitForX() {
+    struct padButtonStatus buttons;
+    u32 paddata;
+
+    padInit(0);
+    padPortOpen(0, 0, padbuf);
+
+    while (1) {
+        if (padRead(0, 0, &buttons) != 0) {
+            paddata = 0xffff ^ buttons.btns;
+            if (paddata & PAD_CROSS)
+                return;
+        }
+        DelayIO();
+    }
+}
+
+static void LaunchDisc(const char *filename, int num_args, char *args[]) {
     ConfigParam config;
     GetOsdConfigParam(&config);
     int language = config.language;
-
-    Read_Launcher_CNF("disc-launcher.cnf", &language);
-
+    bool autolaunch = 1;
+    Read_Launcher_CNF("disc-launcher.cnf", &language, &autolaunch);
     config.language = language;
-    SetOsdConfigParam(&config);
+
+    // Overrides OSD language from cnf file for import games (if disk's region is different than the console's region)
+    // Falls back to console's default language if no cnf file is found or if the value is invalid.
+    if (ConsoleRegion != DiscRegion) {
+        SetOsdConfigParam(&config);
+    }
+    
+    // Ask for confirmation if auto launch is disabled
+    if (!autolaunch) {
+        const char *region_str;
+        switch (DiscRegion) {
+            case DISC_REGION_JAPAN:   region_str = "JAP"; break;
+            case DISC_REGION_USA:     region_str = "USA"; break;
+            case DISC_REGION_EUROPE:  region_str = "EUR"; break;
+            default:                  region_str = "UNK"; break;
+        }
+
+        PrintLogo();
+        scr_printf("Ready to launch %s (%s)\n\n", game_id, region_str);
+        scr_printf("Press X to confirm.");
+        WaitForX();
+    }
+
+    LoadExecPS2(filename, num_args, args);
 }
 
 int main(int argc, char *argv[]) {
@@ -364,8 +348,7 @@ int main(int argc, char *argv[]) {
                         break;
                     default:
                         scr_clear();
-                        scr_printf("Retro Gem Disc Launcher\n"
-                                   "=======================\n\n");
+                        PrintLogo();
                         scr_printf("Unsupported disc. Please insert a PlayStation or PlayStation 2 game disc.");
                         sceCdStop();
                         sceCdSync(0);
@@ -376,8 +359,7 @@ int main(int argc, char *argv[]) {
             }
         } else {
             scr_clear();
-            scr_printf("Retro Gem Disc Launcher\n"
-                       "=======================\n\n");
+            PrintLogo();
             scr_printf("Please insert a PlayStation or PlayStation 2 game disc.");
             while (HasValidDiscInserted(1) < 0) {
                 DelayIO();
@@ -391,7 +373,6 @@ int main(int argc, char *argv[]) {
     DiscRegion = GetDiscRegion(cdboot_path);
     GetBootROMVersion();
     GetConsoleRegion();
-    OverrideOSDLanguage();
 
     if ((DiscType == SCECdPSCD) || (DiscType == SCECdPSCDDA)) { // If PS1 game disc
         char *args[2] = {cdboot_path, ver};
@@ -411,8 +392,7 @@ int main(int argc, char *argv[]) {
 
             // Get the current working directory
             if (getcwd(cwd, sizeof(cwd)) == NULL) {
-                DisplayGameID();
-                LoadExecPS2("rom0:PS1DRV", 2, args);
+                LaunchDisc("rom0:PS1DRV", 2, args);
                 return 1;
             }
 
@@ -422,8 +402,7 @@ int main(int argc, char *argv[]) {
                 if (pfs_pos) *pfs_pos = '\0'; // Terminate string before ":pfs:"
 
                 if (fileXioMount("pfs0:", cwd, FIO_MT_RDONLY) != 0) {
-                    DisplayGameID();
-                    LoadExecPS2("rom0:PS1DRV", 2, args);
+                    LaunchDisc("rom0:PS1DRV", 2, args);
                     return 1;
                 }
                 strcpy(cwd, "pfs0:/");
@@ -440,25 +419,21 @@ int main(int argc, char *argv[]) {
 
                 // Construct the full file path
                 snprintf(fullFilePath, sizeof(fullFilePath), "%s%s", cwd, targetElf);
-                DisplayGameID();
                 LoadELFFromFile(fullFilePath, 0, NULL);
                 return 0;
             } else {
-                DisplayGameID();
-                LoadExecPS2("rom0:PS1DRV", 2, args);
+                LaunchDisc("rom0:PS1DRV", 2, args);
                 return 1;
         }
 
         } else {
             // Run the normal PS1DRV command
-            DisplayGameID();
-            LoadExecPS2("rom0:PS1DRV", 2, args);
+            LaunchDisc("rom0:PS1DRV", 2, args);
             return 0;
         }
     } else {
         // If PS2 game disc
-        DisplayGameID();
-        LoadExecPS2(cdboot_path, 0, NULL);
+        LaunchDisc(cdboot_path, 0, NULL);
         return 0;
     }
 

@@ -5,20 +5,17 @@ A disc launcher for PlayStation 2 consoles patched with [MechaPwn](https://githu
 On these models, import game discs cannot be launched directly from the console menu. This launcher bypasses the PS2 logo check, allowing import and master discs to boot correctly.
   
 It also allows overriding the OSD language when playing import games, which is useful when the console's language settings do not include the disc's region language (e.g., a Japanese console playing a PAL game).
-  
-As a fork of Retro GEM Disc Launcher, it also sets the Retro GEM Game ID when a [Retro GEM](https://www.pixelfx.co) module is installed, allowing per-game settings for all your physical games.
 
 ## Features
 
 ### For PlayStation 2 game discs
 - Skips the PlayStation 2 logo check, allowing MechaPwn users to launch imports and master discs.
 - Optional OSD language override via `disc-launcher.cnf`.
-- Sets Retro GEM Game ID.
 - Adjusts the video mode of the console's PlayStation driver to match that of the inserted disc if necessary.
 
 ### For PlayStation game discs
-- Sets Retro GEM Game ID.
 - Adjusts the video mode of the console's PlayStation driver to match that of the inserted disc if necessary.
+- Optional OSD language override via `disc-launcher.cnf`.
 
 ## Instructions
 
@@ -42,7 +39,16 @@ When playing import game discs, the game may default to English as the console's
 # Valid values: 0=Japanese, 1=English, 2=French, 3=Spanish
 # 4=German, 5=Italian, 6=Dutch, 7=Portuguese
 # Default value if not set or invalid will be console's default
-language = 1
+language = 2
+```
+
+## Disable auto launch
+
+If you don't want the disc to be launched automatically, you can add `autolaunch=0` to `disc-launcher.cnf`
+Once the disc is detected, you'll be asked to press X on your gamepad to start
+```ìni
+# Ask for confirmation before launching the disc (0=no, 1=yes)
+autolaunch = 0
 ```
 
 ## Notes

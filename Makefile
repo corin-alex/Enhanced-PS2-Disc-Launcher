@@ -5,11 +5,11 @@ EE_OBJS = main.o cnf_lite.o $(EE_C_DIR)ps2dev9.o $(EE_C_DIR)ps2atad.o $(EE_C_DIR
 
 EE_C_DIR = modules/
 
-EE_INCS := -I$(PS2SDK)/ports/include -I$(PS2DEV)/gsKit/include -I$(PS2SDK)/ee/include -I$(PS2SDK)/common/include -I.
+EE_INCS := -I$(PS2SDK)/ports/include -I$(PS2SDK)/ee/include -I$(PS2SDK)/common/include -I.
 EE_GPVAL = -G0
-EE_CFLAGS = -O2 -D_EE -Os -mgpopt -mno-gpopt $(EE_GPVAL) -Wall $(EE_INCS) -Wno-stringop-truncation -I$(PS2DEV)/gsKit/include
-EE_LDFLAGS = -L$(PS2SDK)/ee/lib -L$(PS2DEV)/gsKit/lib
-EE_LIBS += -lfileXio -lpatches -lelf-loader-nocolour -L$(PS2SDK)/ports/lib -L$(PS2DEV)/gsKit/lib/ -lgskit -ldmakit -ldebug
+EE_CFLAGS = -O2 -D_EE -Os -mgpopt -mno-gpopt $(EE_GPVAL) -Wall $(EE_INCS) -Wno-stringop-truncation
+EE_LDFLAGS = -L$(PS2SDK)/ee/lib 
+EE_LIBS += -lfileXio -lpatches -lelf-loader-nocolour -L$(PS2SDK)/ports/lib -ldebug -lpad
 EE_NEWLIB_NANO ?= 1
 EE_COMPACT_EXECUTABLE ?= 1
 

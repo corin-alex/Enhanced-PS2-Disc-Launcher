@@ -46,9 +46,9 @@ language = 1
 
 If you don't want the disc to be launched automatically, you can add `autolaunch=0` to `disc-launcher.cnf`
 Once the disc is detected, you'll be asked to press X on your gamepad to start
-```ìni
+```ini
 # Auto launch disk (0=no, 1=yes)
-autolaunch = 1
+autolaunch = 0
 ```
 
 ## Notes

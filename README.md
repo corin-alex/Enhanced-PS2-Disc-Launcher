@@ -35,11 +35,11 @@ It also allows overriding the OSD language when playing import games, which is u
 
 When playing import game discs, the game may default to English as the console's language setting may not match the disc's region. To override the language, create a `disc-launcher.cnf` file in the same location as `disc-launcher.elf` with the following content:
 ```ini
-# Language setting for disc launcher
+# Language override
 # Valid values: 0=Japanese, 1=English, 2=French, 3=Spanish
 # 4=German, 5=Italian, 6=Dutch, 7=Portuguese
 # Default value if not set or invalid will be console's default
-language = 2
+language = 1
 ```
 
 ## Disable auto launch
@@ -47,8 +47,8 @@ language = 2
 If you don't want the disc to be launched automatically, you can add `autolaunch=0` to `disc-launcher.cnf`
 Once the disc is detected, you'll be asked to press X on your gamepad to start
 ```ìni
-# Ask for confirmation before launching the disc (0=no, 1=yes)
-autolaunch = 0
+# Auto launch disk (0=no, 1=yes)
+autolaunch = 1
 ```
 
 ## Notes

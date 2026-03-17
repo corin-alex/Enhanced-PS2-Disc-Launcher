@@ -1,8 +1,8 @@
-# Language setting for disc launcher
+# Language override
 # Valid values: 0=Japanese, 1=English, 2=French, 3=Spanish
 # 4=German, 5=Italian, 6=Dutch, 7=Portuguese
 # Default value if not set or invalid will be console's default
 language = 1
 
-# Ask for confirmation before launching the disc (0=no, 1=yes)
+# Auto launch disk (0=no, 1=yes)
 autolaunch = 1

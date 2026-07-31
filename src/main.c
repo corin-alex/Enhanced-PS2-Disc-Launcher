@@ -1,4 +1,4 @@
-#define LAUNCHER_VERSION "1.1.2"
+#define LAUNCHER_VERSION "1.1.3"
 
 #include <kernel.h>
 #include <errno.h>
@@ -11,7 +11,6 @@
 #include <string.h>
 #include <osd_config.h>
 #include <ctype.h>  // For toupper used to convert to uppercase
-#include <kernel.h>
 #include <sifrpc.h>
 #include <loadfile.h>
 #include <libpad.h>
@@ -118,6 +117,12 @@ static int GetDiscRegion(const char *path) {
                 case 'E':
                     region = DISC_REGION_EUROPE;
                     break;
+                case 'A':
+                    // SCAJ_/SLAJ_ are Japanese releases. Korean IDs (SLKA_/SCKA_) are
+                    // deliberately left unmapped: unknown means "do not touch the config".
+                    if ((strlen(game_id) >= 4) && (game_id[3] == 'J'))
+                        region = DISC_REGION_JAPAN;
+                    break;
             }
         }
     }
@@ -131,6 +136,9 @@ static unsigned short int GetBootROMVersion(void)
     char VerStr[5];
 
     fd = open("rom0:ROMVER", O_RDONLY);
+    if (fd < 0)
+        return 0; // romver stays zeroed, so the console region stays unknown
+
     read(fd, romver, sizeof(romver));
     close(fd);
     VerStr[0] = romver[0];
@@ -290,20 +298,32 @@ static void WaitForX() {
     }
 }
 
-static void LaunchDisc(const char *filename, int num_args, char *args[]) {
-    ConfigParam config;
-    GetOsdConfigParam(&config);
-    int language = config.language;
+// Applies the preferences from disc-launcher.cnf and, when auto launch is disabled,
+// waits for the user to confirm. Every launch path must go through this.
+// Idempotent: only the first call has an effect, so a path that already applied the
+// configuration can still fall back through LaunchDisc() without prompting twice.
+static void ApplyLauncherConfig(void) {
+    static int applied = 0;
+
+    if (applied)
+        return;
+    applied = 1;
+
+    // configGetLanguage/configSetLanguage handle the early Japanese kernels, where the
+    // language lives in ConfigParam.japLanguage instead of ConfigParam.language.
+    int language = configGetLanguage();
     bool autolaunch = 1;
     Read_Launcher_CNF("disc-launcher.cnf", &language, &autolaunch);
-    config.language = language;
 
     // Overrides OSD language from cnf file for import games (if disk's region is different than the console's region)
     // Falls back to console's default language if no cnf file is found or if the value is invalid.
-    if (ConsoleRegion != DiscRegion) {
-        SetOsdConfigParam(&config);
+    // Both regions must be known: an unrecognised disc ID would otherwise always look like an
+    // import and force the language on domestic games.
+    if ((DiscRegion != DISC_REGION_INVALID) && (ConsoleRegion != CONSOLE_REGION_INVALID) &&
+        (ConsoleRegion != DiscRegion)) {
+        configSetLanguage(language);
     }
-    
+
     // Ask for confirmation if auto launch is disabled
     if (!autolaunch) {
         const char *region_str;
@@ -319,7 +339,10 @@ static void LaunchDisc(const char *filename, int num_args, char *args[]) {
         scr_printf("Press X to confirm.");
         WaitForX();
     }
+}
 
+static void LaunchDisc(const char *filename, int num_args, char *args[]) {
+    ApplyLauncherConfig();
     LoadExecPS2(filename, num_args, args);
 }
 
@@ -341,10 +364,31 @@ int main(int argc, char *argv[]) {
                 switch (DiscType) {
                     case SCECdPSCD:
                     case SCECdPSCDDA:
+                        // PS1 discs are started by rom0:PS1DRV, which boots the drive itself,
+                        // so an unparsable SYSTEM.CNF is not fatal here.
+                        scr_clear();
+                        sceCdDiskReady(0);
+                        Read_SYSTEM_CNF(cdboot_path, sizeof(cdboot_path), ver, sizeof(ver));
+                        done = 1;
+                        break;
                     case SCECdPS2CD:
                     case SCECdPS2CDDA:
                     case SCECdPS2DVD:
-                        done = 1;
+                        scr_clear();
+                        sceCdDiskReady(0);
+                        // A PS2 disc is booted from the path in SYSTEM.CNF: without it there is
+                        // nothing to hand to LoadExecPS2, which would just show a black screen.
+                        if (Read_SYSTEM_CNF(cdboot_path, sizeof(cdboot_path), ver, sizeof(ver)) == 0) {
+                            PrintLogo();
+                            scr_printf("Cannot read this disc. Please clean it or try another one.");
+                            sceCdStop();
+                            sceCdSync(0);
+                            while (HasValidDiscInserted(1) > 0) {
+                                DelayIO();
+                            }
+                        } else {
+                            done = 1;
+                        }
                         break;
                     default:
                         scr_clear();
@@ -367,8 +411,6 @@ int main(int argc, char *argv[]) {
         }
     } while (!done);
     scr_clear();
-    sceCdDiskReady(0);
-    Read_SYSTEM_CNF(cdboot_path, ver);
     DiscType = sceCdGetDiskType();
     DiscRegion = GetDiscRegion(cdboot_path);
     GetBootROMVersion();
@@ -380,6 +422,12 @@ int main(int argc, char *argv[]) {
         // If PS1 game has a different video mode to the console
         if (((DiscRegion == 2) && (ConsoleRegion != 2)) ||
             ((DiscRegion == 0 || DiscRegion == 1) && (ConsoleRegion == 2))) {
+
+            // Apply the launcher configuration now, before the IOP reset below: afterwards
+            // disc-launcher.cnf may no longer be reachable on the boot device, and the pad
+            // modules WaitForX() relies on are gone. The later LaunchDisc() fallbacks in this
+            // branch become no-ops for the configuration, so X is never asked twice.
+            ApplyLauncherConfig();
 
             // Initialize and configure environment
             if (argc > 1) {
@@ -412,7 +460,7 @@ int main(int argc, char *argv[]) {
             if (FindElfFile() == 0) {
                 // Ensure that cwd ends with a '/'
                 size_t cwd_len = strlen(cwd);
-                if (cwd[cwd_len - 1] != '/') {
+                if ((cwd_len > 0) && (cwd[cwd_len - 1] != '/')) {
                 // Append '/' if it's not already there
                 strncat(cwd, "/", sizeof(cwd) - cwd_len - 1);
                 }
@@ -436,10 +484,4 @@ int main(int argc, char *argv[]) {
         LaunchDisc(cdboot_path, 0, NULL);
         return 0;
     }
-
-    fioExit();
-    sceCdInit(SCECdEXIT);
-    SifExitRpc();
-
-    return 0;
 }

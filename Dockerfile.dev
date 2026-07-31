@@ -1,0 +1,13 @@
+# Development image for Enhanced PS2 Disc Launcher.
+#
+# ps2dev/ps2dev ships the EE/IOP toolchain, PS2SDK, ps2sdk-ports, ps2-packer and
+# ps2client, and is published for both amd64 and arm64 -- so this builds natively
+# on Apple Silicon as well as on x86 Linux/Windows hosts.
+#
+# The image's runtime stage is a bare Alpine, so the build tools have to be added.
+# Bump the tag below to move to a newer SDK (see CLAUDE.md).
+FROM ps2dev/ps2dev:v2.0.0
+
+RUN apk add --no-cache build-base git bash zip ucl
+
+WORKDIR /src

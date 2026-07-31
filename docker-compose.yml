@@ -1,0 +1,15 @@
+# Platform-neutral build entry point (macOS, Windows, Linux):
+#
+#   docker compose run --rm dev              # build disc-launcher.elf
+#   docker compose run --rm dev make clean   # remove build output
+#   docker compose run --rm dev sh           # shell inside the toolchain
+services:
+  dev:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    image: enhanced-ps2-disc-launcher-dev
+    volumes:
+      - .:/src
+    working_dir: /src
+    command: make

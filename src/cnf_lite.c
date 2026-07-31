@@ -12,6 +12,17 @@
 // Function prototypes.
 static int get_CNF_string(char **CNF_p_p, char **name_p_p, char **value_p_p);
 
+// Copies src into dst without ever writing past dst_size, always terminating.
+// CNF values come from the disc, so their length cannot be trusted.
+static void copy_string(char *dst, size_t dst_size, const char *src)
+{
+    if (dst_size == 0)
+        return;
+
+    strncpy(dst, src, dst_size - 1);
+    dst[dst_size - 1] = '\0';
+}
+
 static int file_exists(const char *file)
 {
     int fd, result;
@@ -81,16 +92,18 @@ start_line:
 } // Ends get_CNF_string
 
 //----------------------------------------------------------------
-int Read_SYSTEM_CNF(char *boot_path, char *ver)
+int Read_SYSTEM_CNF(char *boot_path, size_t boot_path_size, char *ver, size_t ver_size)
 {
     // Returns disc type : 0 = failed; 1 = PS1; 2 = PS2;
     size_t CNF_size;
     char *RAM_p, *CNF_p, *name, *value;
+    int bytes_read;
     int fd        = -1;
     int Disc_Type = -1; // -1 = Internal : Not Tested;
 
     // place 3 question mark in ver string
-    strcpy(ver, "???");
+    copy_string(ver, ver_size, "???");
+    copy_string(boot_path, boot_path_size, "???");
 
     fd = open("cdrom0:\\SYSTEM.CNF;1", O_RDONLY);
     if (fd < 0) {
@@ -98,14 +111,14 @@ int Read_SYSTEM_CNF(char *boot_path, char *ver)
         if (Disc_Type == -1) {
             // Test PS1 special cases
             if (file_exists("cdrom0:\\PSXMYST\\MYST.CCS;1")) {
-                strcpy(boot_path, "SLPS_000.24");
+                copy_string(boot_path, boot_path_size, "SLPS_000.24");
                 Disc_Type = 1;
             } else if (file_exists("cdrom0:\\CDROM\\LASTPHOT\\ALL_C.NBN;1")) {
-                strcpy(boot_path, "SLPS_000.65");
+                copy_string(boot_path, boot_path_size, "SLPS_000.65");
                 Disc_Type = 1;
             } else if (file_exists("cdrom0:\\PSX.EXE;1")) {
                 // place 3 question mark in pathname
-                strcpy(boot_path, "???");
+                copy_string(boot_path, boot_path_size, "???");
                 Disc_Type = 1;
             }
         }
@@ -118,32 +131,32 @@ int Read_SYSTEM_CNF(char *boot_path, char *ver)
 
     CNF_size = lseek(fd, 0, SEEK_END);
     lseek(fd, 0, SEEK_SET);
-    RAM_p = (char *)malloc(CNF_size);
+    RAM_p = (char *)malloc(CNF_size + 1); // room for the terminator
     CNF_p = RAM_p;
     if (CNF_p == NULL) {
         close(fd);
         goto failed_load;
     }
-    read(fd, CNF_p, CNF_size); // Read CNF as one long string
+    bytes_read = read(fd, CNF_p, CNF_size); // Read CNF as one long string
     close(fd);
-    CNF_p[CNF_size] = '\0'; // Terminate the CNF string
-
-    strcpy(boot_path, "???"); // place 3 question mark in boot path
+    if (bytes_read < 0)
+        bytes_read = 0;
+    CNF_p[bytes_read] = '\0'; // Terminate the CNF string
 
     while (get_CNF_string(&CNF_p, &name, &value)) {
         // A variable was found, now we dispose of its value.
         if (!strcmp(name, "BOOT2")) { // check for BOOT2 entry
-            strcpy(boot_path, value);
+            copy_string(boot_path, boot_path_size, value);
             Disc_Type = 2; // If found, PS2 disc type
             continue;
         }
         if (!strcmp(name, "BOOT")) { // check for BOOT entry
-            strcpy(boot_path, value);
+            copy_string(boot_path, boot_path_size, value);
             Disc_Type = 1; // If found, PS1 disc type
             continue;
         }
         if (!strcmp(name, "VER")) { // check for VER entry
-            strcpy(ver, value);
+            copy_string(ver, ver_size, value);
             continue;
         }
     } // ends for
@@ -156,6 +169,7 @@ int Read_Launcher_CNF(const char *cnf_path, int *language,  bool *autolaunch)
 {
     size_t CNF_size;
     char *RAM_p, *CNF_p, *name, *value;
+    int bytes_read;
     int fd = -1;
 
     fd = open(cnf_path, O_RDONLY);
@@ -170,9 +184,11 @@ int Read_Launcher_CNF(const char *cnf_path, int *language,  bool *autolaunch)
         close(fd);
         return -1;
     }
-    read(fd, CNF_p, CNF_size);
+    bytes_read = read(fd, CNF_p, CNF_size);
     close(fd);
-    CNF_p[CNF_size] = '\0';
+    if (bytes_read < 0)
+        bytes_read = 0;
+    CNF_p[bytes_read] = '\0';
 
     while (get_CNF_string(&CNF_p, &name, &value)) {
         if (!strcmp(name, "language")) {

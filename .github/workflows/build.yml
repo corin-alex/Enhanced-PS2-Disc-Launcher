@@ -1,0 +1,40 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container: ps2dev/ps2dev:v2.0.0
+    permissions:
+      contents: write
+    steps:
+      # The ps2dev image is a bare Alpine plus the toolchain: add make & git
+      # before checkout so actions/checkout can use real git.
+      - name: Install build tools
+        run: apk add --no-cache build-base git zip
+
+      - uses: actions/checkout@v4
+
+      - name: Build
+        run: make
+
+      - name: Package
+        run: zip -j disc-launcher.zip dist/disc-launcher.elf dist/disc-launcher.cnf
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: disc-launcher
+          path: dist/
+
+      - name: Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: disc-launcher.zip
+          generate_release_notes: true

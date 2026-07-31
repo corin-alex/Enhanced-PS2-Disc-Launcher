@@ -1,0 +1,20 @@
+{
+  "name": "PS2 Disc Launcher (ps2dev)",
+  "build": {
+    "dockerfile": "../Dockerfile.dev",
+    "context": ".."
+  },
+  "workspaceFolder": "/src",
+  "workspaceMount": "source=${localWorkspaceFolder},target=/src,type=bind,consistency=cached",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-vscode.cpptools"
+      ],
+      "settings": {
+        "C_Cpp.default.configurationProvider": null,
+        "terminal.integrated.defaultProfile.linux": "sh"
+      }
+    }
+  }
+}

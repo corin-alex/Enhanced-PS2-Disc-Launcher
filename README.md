@@ -1,61 +1,69 @@
 # Enhanced PS2 Disc Launcher
 
-A disc launcher for PlayStation 2 consoles patched with [MechaPwn](https://github.com/MatheusBond/MechaPwn), particularly aimed at Japanese models such as the SCPH-50000 where MechaPwn does not fully disable region locking.
-  
-On these models, import game discs cannot be launched directly from the console menu. This launcher bypasses the PS2 logo check, allowing import and master discs to boot correctly.
-  
-It also allows overriding the OSD language when playing import games, which is useful when the console's language settings do not include the disc's region language (e.g., a Japanese console playing a PAL game).
+A disc launcher for PlayStation 2 consoles patched with [MechaPwn](https://github.com/MatheusBond/MechaPwn), aimed at models where MechaPwn does not fully disable region locking — notably Japanese consoles such as the SCPH-50000.
+
+On those consoles, import discs cannot be started from the console menu. This launcher boots the disc itself, bypassing the PlayStation 2 logo check, and can override the OSD language so import games do not fall back to English.
 
 ## Features
 
-### For PlayStation 2 game discs
-- Skips the PlayStation 2 logo check, allowing MechaPwn users to launch imports and master discs.
-- Optional OSD language override via `disc-launcher.cnf`.
-- Adjusts the video mode of the console's PlayStation driver to match that of the inserted disc if necessary.
+- Skips the PlayStation 2 logo check, so import and master discs boot correctly.
+- Optional OSD language override for import games (`disc-launcher.cnf`).
+- Optional confirmation prompt instead of launching the disc immediately.
+- Matches the PlayStation driver's video mode to PS1 import discs, via [PS1VModeNeg](https://github.com/ps2homebrew/PS1VModeNeg).
 
-### For PlayStation game discs
-- Adjusts the video mode of the console's PlayStation driver to match that of the inserted disc if necessary.
-- Optional OSD language override via `disc-launcher.cnf`.
+## Installation
 
-## Instructions
+`disc-launcher.elf` runs from a PS2 memory card, USB drive, or HDD. Grab it from the [Releases](../../releases) page or [build it yourself](#building-from-source).
 
-`disc-launcher.elf` can be run from a Memory Card (PS2), USB, or HDD. For a seamless experience, insert the disc before launching the application.
+Recommended setup with Free MCBoot:
 
-### Recommended setup for Free MCBoot users:
-- Put `disc-launcher.elf` in the `APPS` folder on your Free MCBoot memory card.
-- To enable video mode switching for imported PlayStation games, place `PS1VModeNeg.elf` in the same location.
-- To override console language, create `disc-launcher.cnf` or copy and edit the provided one. see [Language Settings](#Language-Settings)
-- Go to `Free MCBoot Configurator` and select `Configure OSDSYS options...`
-- Turn on `Skip Disc Boot` to prevent the console from auto-booting game discs when they are inserted.
-- Configure the item `Launch disc` so that it points to `mc?:/APPS/disc-launcher.elf`.
-- Return to the previous screen. Save CNF to `MC0` or `MC1` (depending on where your Free MCBoot memory card is located) and exit.
-- To launch a game, simply insert the game disc, then select `Launch disc` from the Free MCBoot menu. Alternatively, select `Launch disc` and then insert the game disc.
+1. Copy `disc-launcher.elf` into the `APPS` folder of your Free MCBoot memory card.
+2. For PS1 video mode switching, put `PS1VModeNeg.elf` in the same folder.
+3. To override the console language, copy `disc-launcher.cnf` there too and edit it — see [Configuration](#configuration).
+4. In `Free MCBoot Configurator`, open `Configure OSDSYS options...`.
+5. Enable `Skip Disc Boot` so the console stops auto-booting discs on insert.
+6. Point the `Launch disc` item at `mc?:/APPS/disc-launcher.elf`.
+7. Go back, save the CNF to `MC0` or `MC1` (wherever your FMCB card is), and exit.
 
-## Language Settings
+To play a game: insert the disc, then pick `Launch disc` from the Free MCBoot menu (either order works).
 
-When playing import game discs, the game may default to English as the console's language setting may not match the disc's region. To override the language, create a `disc-launcher.cnf` file in the same location as `disc-launcher.elf` with the following content:
+## Configuration
+
+Create `disc-launcher.cnf` next to `disc-launcher.elf`. Both settings are optional.
+
 ```ini
 # Language override
-# Valid values: 0=Japanese, 1=English, 2=French, 3=Spanish
+# 0=Japanese, 1=English, 2=French, 3=Spanish
 # 4=German, 5=Italian, 6=Dutch, 7=Portuguese
-# Default value if not set or invalid will be console's default
 language = 1
+
+# Auto launch disc (0=no, 1=yes)
+autolaunch = 1
 ```
 
-## Disable auto launch
+| Setting | Values | Default | Notes |
+| --- | --- | --- | --- |
+| `language` | `0`–`7` | console setting | Only applied when the disc's region is recognised **and** differs from the console's. Invalid or missing values fall back to the console setting. |
+| `autolaunch` | `0`, `1` | `1` | With `0`, the launcher shows the detected game and waits for **X**. |
 
-If you don't want the disc to be launched automatically, you can add `autolaunch=0` to `disc-launcher.cnf`
-Once the disc is detected, you'll be asked to press X on your gamepad to start
-```ini
-# Auto launch disk (0=no, 1=yes)
-autolaunch = 0
+## PlayStation 1 discs
+
+The launcher compares the region of the PS1 disc with the console's. On a mismatch (for example a PAL game in an NTSC console) it runs `PS1VModeNeg.elf` to adjust the PlayStation driver's video mode; otherwise the game boots normally. `PS1VModeNeg.elf` must sit in the same location as `disc-launcher.elf` (memory card, USB, or HDD) — if it is not found, PS1 games are launched normally. Download it [here](https://github.com/ps2homebrew/PS1VModeNeg).
+
+## Building from source
+
+No local PS2 toolchain required — the build runs in the [ps2dev](https://github.com/ps2dev/ps2dev) container, which is published for both x86 and ARM (so it is native on Apple Silicon):
+
+```sh
+./build.sh                      # macOS, Linux, WSL, Git Bash
+docker compose run --rm dev     # same thing, any platform
 ```
 
-## Notes
+The build produces `dist/disc-launcher.elf` alongside a copy of `disc-launcher.cnf`, so the whole `dist/` folder can be copied straight to a memory card. Intermediate files stay in `out/`, and sources live in `src/`. `./build.sh clean` removes both output folders; `./build.sh shell` opens a shell inside the toolchain. If you already have a ps2dev toolchain installed (`$PS2SDK` set), `./build.sh` and plain `make` use it directly.
 
-The Disc Launcher checks the region of both the PlayStation game disc and the console. If a mismatch is found (e.g., a PAL game in an NTSC console), then PS1VModeNeg is launched to adjust the video mode of the PlayStation driver. If no mismatch is found, the game is launched normally. PS1VModeNeg can be downloaded [here](https://github.com/ps2homebrew/PS1VModeNeg). `PS1VModeNeg.elf` should be placed in the same location as `disc-launcher.elf` (either on Memory Card (PS2), USB, or HDD). If `PS1VModeNeg.elf` is not found, then all PlayStation games will be launched normally.
+VS Code users can instead run `Dev Containers: Reopen in Container` for a ready-made environment. See [CLAUDE.md](CLAUDE.md) for the project layout and internals.
 
 ## Credits
 
-Based on [Retro GEM Disc Launcher](https://github.com/CosmicScale/Retro-GEM-PS2-Disc-Launcher) by [CosmicScale](https://github.com/CosmicScale).  
+Based on [Retro GEM Disc Launcher](https://github.com/CosmicScale/Retro-GEM-PS2-Disc-Launcher) by [CosmicScale](https://github.com/CosmicScale).
 Updated by [Exalandru](https://github.com/corin-alex).
